@@ -1,0 +1,57 @@
+name: Build mimikatz
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ x64, Win32 ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Patch Windows SDK ntsecapi.h (RtlDecryptMemory prototype)
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\Include" -Recurse -Filter ntsecapi.h -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "Patching $($_.FullName)"
+            $path = $_.FullName
+            $content = Get-Content $path
+            $patched = $content | ForEach-Object { $_ -replace "^RtlDecryptMemory\(`$", "__stdcall RtlDecryptMemory(" }
+            Set-Content -Path $path -Value $patched
+          }
+
+      - name: Build (Release / ${{ matrix.platform }})
+        shell: cmd
+        run: |
+          msbuild mimikatz.sln /m /t:mimikatz;mimilib;mimispool ^
+            /p:Configuration=Release ^
+            /p:Platform=${{ matrix.platform }} ^
+            /p:PlatformToolset=v143 ^
+            /p:XPDeprecationWarning=false
+
+      - name: Show outputs
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse -Include mimikatz.exe,mimilib.dll,mimispool.dll |
+            Select-Object FullName, Length | Format-Table -AutoSize
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mimikatz-${{ matrix.platform }}
+          path: |
+            ${{ matrix.platform }}/mimikatz.exe
+            ${{ matrix.platform }}/mimilib.dll
+            ${{ matrix.platform }}/mimispool.dll
+          if-no-files-found: warn
