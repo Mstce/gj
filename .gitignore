@@ -28,6 +28,12 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 [Aa][Rr][Mm]64[Ee][Cc]/
+
+# But keep the static libs that ship with mimikatz (shared helper stubs for linker)
+!/lib/
+!/lib/**
+!/inc/
+!/inc/**
 bld/
 [Oo]bj/
 [Oo]ut/
